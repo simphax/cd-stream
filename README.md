@@ -82,6 +82,10 @@ npm run build      # type-checks, then writes static files to dist/
 npm run preview
 ```
 
+`npm run build:artifact` makes a demo-only, single-file build
+(`dist-artifact/cd-stream.html`) for sandboxed hosts that block network access,
+such as a claude.ai Artifact.
+
 `dist/` is fully static and uses relative asset paths, so it can be hosted
 anywhere (GitHub Pages, Netlify, S3…). Remember to register the hosted URL as a
 redirect URI.

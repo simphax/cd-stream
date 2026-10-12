@@ -1,8 +1,4 @@
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
-import '@fontsource/ibm-plex-mono/400.css';
-import '@fontsource/ibm-plex-mono/500.css';
+import './fonts';
 import './styles.css';
 
 import { Controller } from './app/controller';
@@ -18,6 +14,8 @@ import type { Album } from './types';
 import { Overlay } from './ui/overlay';
 
 const overlay = new Overlay();
+/** Builds without network access to Spotify (e.g. the hosted Artifact) only offer the demo. */
+const DEMO_ONLY = import.meta.env.VITE_DEMO_ONLY === '1';
 let playback: Playback | null = null;
 let source: 'demo' | 'spotify' = 'demo';
 
@@ -74,6 +72,7 @@ async function main() {
     controller.interactive = false;
     controller.setLibrary(demoLibrary());
     overlay.showLogin({
+      demoOnly: DEMO_ONLY,
       needsClientId: !hasBuiltInClientId(),
       clientId: getClientId() ?? '',
       redirectUri: redirectUri(),
@@ -133,7 +132,7 @@ async function main() {
     redirectError = err instanceof Error ? err.message : String(err);
   }
 
-  if (isLoggedIn()) await startSpotify();
+  if (isLoggedIn() && !DEMO_ONLY) await startSpotify();
   else showLogin(redirectError);
 }
 

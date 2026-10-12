@@ -431,6 +431,13 @@ body {
   font-size: 12px;
 }
 
+.note {
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--soft);
+}
+
 .error {
   margin: 14px 0 0;
   color: #b3261e;

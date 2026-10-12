@@ -12,6 +12,7 @@ import { WALL_COLOR, type Stage } from '../three/stage';
 import { canvas, canvasTexture, drawBooklet, loadCover, type BookletLines } from '../three/textures';
 import type { Album, Track } from '../types';
 import type { Overlay } from '../ui/overlay';
+import { storage } from '../storage';
 
 type Target =
   | { kind: 'button'; name: PlayerButton }
@@ -104,7 +105,7 @@ export class Controller {
 
   private booklet = { canvas: canvas(1024, 1024), texture: null as THREE.CanvasTexture | null, lines: null as BookletLines | null, index: -2, albumId: '' };
   private kbStack = 0;
-  private hintLevel = Number(localStorage.getItem('cdstream.hints') ?? '0');
+  private hintLevel = Number(storage.get('cdstream.hints') ?? '0');
   private tmpV = new THREE.Vector3();
   private tmpQ = new THREE.Quaternion();
 
@@ -1197,7 +1198,7 @@ export class Controller {
   private hintLevelAtLeast(level: number) {
     if (this.hintLevel >= level) return;
     this.hintLevel = level;
-    localStorage.setItem('cdstream.hints', String(level));
+    storage.set('cdstream.hints', String(level));
   }
 
   private touchUi() {

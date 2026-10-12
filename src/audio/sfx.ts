@@ -1,4 +1,5 @@
 import { audioContext } from './context';
+import { storage } from '../storage';
 
 /**
  * Synthesised foley — plastic clicks, hinge snaps and the whirr of a disc
@@ -6,14 +7,14 @@ import { audioContext } from './context';
  */
 
 const STORAGE_KEY = 'cdstream.sfxMuted';
-let muted = localStorage.getItem(STORAGE_KEY) === '1';
+let muted = storage.get(STORAGE_KEY) === '1';
 let noise: AudioBuffer | null = null;
 let out: GainNode | null = null;
 
 export const sfxMuted = () => muted;
 export function setSfxMuted(m: boolean) {
   muted = m;
-  localStorage.setItem(STORAGE_KEY, m ? '1' : '0');
+  storage.set(STORAGE_KEY, m ? '1' : '0');
 }
 
 function setup() {

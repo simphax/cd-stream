@@ -3,6 +3,8 @@
  * no client secret or backend required.
  */
 
+import { storage } from '../storage';
+
 const AUTH_URL = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 
@@ -34,7 +36,7 @@ interface StoredToken {
 export function getClientId(): string | null {
   const fromEnv = (import.meta.env.VITE_SPOTIFY_CLIENT_ID as string | undefined)?.trim();
   if (fromEnv) return fromEnv;
-  return localStorage.getItem(LS.clientId);
+  return storage.get(LS.clientId);
 }
 
 export function hasBuiltInClientId() {
@@ -42,7 +44,7 @@ export function hasBuiltInClientId() {
 }
 
 export function setClientId(id: string) {
-  localStorage.setItem(LS.clientId, id.trim());
+  storage.set(LS.clientId, id.trim());
 }
 
 export function redirectUri() {
@@ -69,8 +71,8 @@ export async function login() {
   if (!clientId) throw new Error('Missing Spotify Client ID');
   const verifier = randomString(64);
   const state = randomString(16);
-  localStorage.setItem(LS.verifier, verifier);
-  localStorage.setItem(LS.state, state);
+  storage.set(LS.verifier, verifier);
+  storage.set(LS.state, state);
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -91,13 +93,13 @@ function store(json: { access_token: string; refresh_token?: string; expires_in:
     expiresAt: Date.now() + json.expires_in * 1000,
     scope: json.scope ?? prev?.scope ?? '',
   };
-  localStorage.setItem(LS.token, JSON.stringify(token));
+  storage.set(LS.token, JSON.stringify(token));
   return token;
 }
 
 function readToken(): StoredToken | null {
   try {
-    const raw = localStorage.getItem(LS.token);
+    const raw = storage.get(LS.token);
     return raw ? (JSON.parse(raw) as StoredToken) : null;
   } catch {
     return null;
@@ -120,10 +122,10 @@ export async function handleRedirect(): Promise<void> {
 
   if (error) throw new Error(error === 'access_denied' ? 'Spotify login was cancelled.' : `Spotify login failed: ${error}`);
 
-  const verifier = localStorage.getItem(LS.verifier);
-  const expectedState = localStorage.getItem(LS.state);
-  localStorage.removeItem(LS.verifier);
-  localStorage.removeItem(LS.state);
+  const verifier = storage.get(LS.verifier);
+  const expectedState = storage.get(LS.state);
+  storage.remove(LS.verifier);
+  storage.remove(LS.state);
   if (!verifier || state !== expectedState) throw new Error('Login session expired — please try again.');
 
   const clientId = getClientId();
@@ -181,5 +183,5 @@ export async function getAccessToken(force = false): Promise<string> {
 }
 
 export function logout() {
-  localStorage.removeItem(LS.token);
+  storage.remove(LS.token);
 }

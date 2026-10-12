@@ -123,6 +123,7 @@ export class Overlay {
   /* -------------------------------- login ------------------------------ */
 
   showLogin(opts: {
+    demoOnly?: boolean;
     needsClientId: boolean;
     clientId: string;
     redirectUri: string;
@@ -143,6 +144,12 @@ export class Overlay {
     } else if (!opts.clientId) setup.open = true;
     err.hidden = !opts.error;
     err.textContent = opts.error ?? '';
+    if (opts.demoOnly) {
+      $('connect').hidden = true;
+      setup.hidden = true;
+      $('demo').classList.replace('ghost', 'primary');
+      $('demo-note').hidden = false;
+    }
 
     $('connect').onclick = () => {
       const id = input.value.trim();
