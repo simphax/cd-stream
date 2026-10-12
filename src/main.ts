@@ -119,7 +119,7 @@ async function main() {
       overlay.setLoading(null);
       let message = err instanceof Error ? err.message : String(err);
       if (err instanceof SpotifyError && err.status === 403) {
-        message = 'Spotify refused access. If the app is in Development Mode, add your account under "Users and Access" in the Spotify dashboard.';
+        message = 'Spotify refused access. If the app is in Development Mode, add your account under "User Management" in the Spotify dashboard.';
       }
       logout();
       showLogin(message);

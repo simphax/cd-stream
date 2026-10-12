@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Album } from '../types';
 import { Disc } from './disc';
-import { placeholderCover, softShadow, spineTexture } from './textures';
+import { glareTexture, placeholderCover, softShadow, spineTexture } from './textures';
 import type { Spring } from '../anim/tween';
 
 /** Real jewel case proportions, 1 unit = 100 mm. */
@@ -103,6 +103,7 @@ export class JewelCase {
   private backMat: THREE.MeshStandardMaterial;
   private details: THREE.Group | null = null;
   private shadow: THREE.Mesh | null = null;
+  private glare: THREE.Mesh | null = null;
   private _open = 0;
 
   constructor(public album: Album) {
@@ -186,6 +187,26 @@ export class JewelCase {
     d.add(hub, recess);
     this.body.add(d);
     this.details = d;
+
+    const glareMap = glareTexture().clone();
+    this.glare = new THREE.Mesh(
+      new THREE.PlaneGeometry(CASE.W, CASE.H),
+      new THREE.MeshBasicMaterial({ map: glareMap, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    this.glare.position.set(CASE.W / 2, 0, CASE.LID_T / 2 + 0.001);
+    this.glare.renderOrder = 3;
+    this.glare.raycast = () => {};
+    this.lidPivot.add(this.glare);
+  }
+
+  /** Slides the lid highlight with the case's tilt so it feels like real gloss. */
+  updateGlare(shift: number) {
+    if (!this.glare) return;
+    const m = this.glare.material as THREE.MeshBasicMaterial;
+    m.map!.offset.set(shift, -shift * 0.4);
+    // the highlight belongs to the outside of the lid; fade it as the lid swings away
+    m.opacity = 0.36 * Math.max(0, 1 - this._open * 1.6);
+    this.glare.visible = m.opacity > 0.002;
   }
 
   setBooklet(texture: THREE.Texture) {
@@ -229,6 +250,12 @@ export class JewelCase {
     bm?.map?.dispose();
     bm?.dispose();
     this.disc?.dispose();
+    if (this.glare) {
+      const gm = this.glare.material as THREE.MeshBasicMaterial;
+      gm.map?.dispose();
+      gm.dispose();
+      this.glare.geometry.dispose();
+    }
     this.shadow?.geometry.dispose();
     (this.shadow?.material as THREE.Material | undefined)?.dispose();
     this.root.removeFromParent();

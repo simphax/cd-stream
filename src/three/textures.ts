@@ -316,23 +316,29 @@ export function discLabel(source: CanvasImageSource | null, color: THREE.Color) 
   mg.arc(0, 0, inner, 0, Math.PI * 2);
   mg.fill();
 
-  // clear stacking ring & hub
-  g.fillStyle = '#b9bcc4';
+  // mirror band, then the clear plastic hub (dark: you see what is behind it)
+  const band = g.createRadialGradient(0, 0, R * 0.27, 0, 0, inner);
+  band.addColorStop(0, '#c9ccd3');
+  band.addColorStop(0.5, '#eceef2');
+  band.addColorStop(1, '#bfc3ca');
+  g.fillStyle = band;
   g.beginPath();
   g.arc(0, 0, inner, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = 'rgba(255,255,255,0.6)';
-  g.lineWidth = 3;
+  g.fillStyle = '#3d4047';
   g.beginPath();
   g.arc(0, 0, R * 0.27, 0, Math.PI * 2);
-  g.stroke();
-  g.fillStyle = 'rgba(235,238,243,0.9)';
-  g.beginPath();
-  g.arc(0, 0, R * 0.22, 0, Math.PI * 2);
   g.fill();
-  mg.fillStyle = '#555';
+  g.strokeStyle = 'rgba(255,255,255,0.35)';
+  g.lineWidth = 3;
+  for (const r of [0.2, 0.265]) {
+    g.beginPath();
+    g.arc(0, 0, R * r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  mg.fillStyle = '#000';
   mg.beginPath();
-  mg.arc(0, 0, R * 0.22, 0, Math.PI * 2);
+  mg.arc(0, 0, R * 0.27, 0, Math.PI * 2);
   mg.fill();
 
   // outer edge ring
@@ -398,4 +404,25 @@ export function softShadow(width: number, height: number, opacity = 0.3) {
   mesh.renderOrder = 1;
   mesh.raycast = () => {};
   return mesh;
+}
+
+/** Diagonal soft highlight that slides across glossy plastic. */
+let glareTex: THREE.Texture | null = null;
+export function glareTexture() {
+  if (glareTex) return glareTex;
+  const [c, g] = canvas(512, 512);
+  const grad = g.createLinearGradient(0, 0, 512, 512);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.36, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.42, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.47, 'rgba(255,255,255,0.08)');
+  grad.addColorStop(0.53, 'rgba(255,255,255,0.0)');
+  grad.addColorStop(0.58, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(0.62, 'rgba(255,255,255,0)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 512, 512);
+  glareTex = canvasTexture(c);
+  glareTex.wrapS = THREE.ClampToEdgeWrapping;
+  return glareTex;
 }

@@ -197,6 +197,7 @@ export class Controller {
       this.focused.root.position.copy(pose.pos);
       this.focused.root.scale.setScalar(pose.scale);
     }
+    this.updateHint();
   }
 
   /* ================================================================== */
@@ -228,6 +229,7 @@ export class Controller {
       f.tilt.rotation.x = damp(f.tilt.rotation.x, -this.pointerSmooth.y * 0.12 * tiltTarget, 6, dt);
       f.tilt.position.y = Math.sin(t * 1.3) * 0.012 + this.flick.y;
       f.setFloatingShadow(this.dimState.amount);
+      f.updateGlare(f.tilt.rotation.y * 1.8 - f.tilt.rotation.x * 0.8 + 0.08);
     }
 
     this.updateDiscDrag(dt);
@@ -320,6 +322,7 @@ export class Controller {
     el.addEventListener('pointermove', (e) => this.onMove(e));
     el.addEventListener('pointerup', (e) => this.onUp(e));
     el.addEventListener('pointercancel', (e) => this.onUp(e, true));
+    el.addEventListener('lostpointercapture', (e) => this.onUp(e, true));
     el.addEventListener('pointerleave', (e) => {
       if (e.pointerType === 'mouse' && !this.press) {
         this.shelf.setHover(null);
@@ -515,6 +518,7 @@ export class Controller {
   }
 
   private onUp(e: PointerEvent, cancelled = false) {
+    unlockAudio(); // iOS only unlocks audio on the end of a touch
     const p = this.press;
     if (!p || p.id !== e.pointerId) return;
     this.press = null;
@@ -949,11 +953,10 @@ export class Controller {
 
   async dismiss() {
     const f = this.focused;
-    if (!f || this.mode !== 'focus') return;
+    if (!f || this.mode !== 'focus' || this.drag) return;
     this.mode = 'transition';
     this.overlay.setCaption(null);
     this.overlay.setHint(null);
-    if (this.drag) return;
     if (f.open > 0.01) {
       await this.closeCase();
       await wait(0.06);

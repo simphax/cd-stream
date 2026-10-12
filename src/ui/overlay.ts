@@ -38,7 +38,10 @@ export class Overlay {
   /* -------------------------------- hint ------------------------------- */
 
   setHint(text: string | null, top = false) {
-    if (text && text === this.hintText) return;
+    if (text && text === this.hintText) {
+      this.hint.classList.toggle('top', top);
+      return;
+    }
     this.hintText = text ?? '';
     if (!text) {
       this.hint.classList.remove('visible');
