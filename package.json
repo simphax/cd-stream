@@ -1,0 +1,23 @@
+{
+  "name": "cd-stream",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/spotify-web-playback-sdk": "^0.1.19",
+    "@types/three": "^0.186.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.7"
+  }
+}
