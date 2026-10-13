@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#e9e5df" />
+    <meta name="description" content="Browse your Spotify library as a shelf of CDs. Open the case, put the disc in the player — one album at a time." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23d7d9df'/%3E%3Ccircle cx='32' cy='32' r='22' fill='%23e4572e'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23c9ccd3'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23e9e5df'/%3E%3C/svg%3E" />
+    <title>cd·stream</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage" aria-label="A shelf of CDs and a CD player"></div>
+
+      <header class="topbar">
+        <div class="brand">cd<span>·</span>stream</div>
+        <div class="topbar-right">
+          <span id="mode" class="mode" hidden></span>
+          <button id="sound" class="icon-btn" type="button" aria-label="Toggle sound effects" title="Sound effects"></button>
+          <button id="user" class="user" type="button" hidden></button>
+        </div>
+      </header>
+
+      <div id="caption" class="caption" aria-live="polite">
+        <div class="caption-title"></div>
+        <div class="caption-meta"></div>
+      </div>
+
+      <div id="hint" class="hint" aria-live="polite"></div>
+      <div id="toast" class="toast" role="status"></div>
+      <div id="loading" class="loading" hidden><div class="spinner"></div><span></span></div>
+
+      <div id="login" class="login" hidden>
+        <div class="card">
+          <div class="disc-logo" aria-hidden="true"></div>
+          <h1>cd<span>·</span>stream</h1>
+          <p class="tagline">Your Spotify library as a shelf of CDs.<br />Pick one, open the case, put the disc in the player.<br />One album at a time.</p>
+          <button id="connect" class="btn primary" type="button">Connect Spotify</button>
+          <button id="demo" class="btn ghost" type="button">Try the demo</button>
+          <details id="setup" class="setup">
+            <summary>Setup</summary>
+            <label for="client-id">Spotify Client ID</label>
+            <input id="client-id" type="text" autocomplete="off" spellcheck="false" placeholder="from developer.spotify.com/dashboard" />
+            <p>Add this Redirect URI to your Spotify app:</p>
+            <code id="redirect-uri"></code>
+            <p class="small">In-browser playback needs Spotify Premium on a desktop browser. Otherwise cd·stream remote-controls the Spotify app on your phone or computer.</p>
+          </details>
+          <p id="demo-note" class="note" hidden>This hosted copy plays a shelf of made-up albums. To play your own Spotify library, run cd·stream from your own address (see the README).</p>
+          <p id="login-error" class="error" hidden></p>
+        </div>
+      </div>
+    </div>
+    <noscript>cd·stream needs JavaScript and WebGL.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

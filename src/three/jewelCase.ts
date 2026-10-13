@@ -1,0 +1,263 @@
+import * as THREE from 'three';
+import type { Album } from '../types';
+import { Disc } from './disc';
+import { glareTexture, placeholderCover, softShadow, spineTexture } from './textures';
+import type { Spring } from '../anim/tween';
+
+/** Real jewel case proportions, 1 unit = 100 mm. */
+export const CASE = {
+  W: 1.42,
+  H: 1.25,
+  D: 0.104,
+  COVER: 1.2,
+  LID_T: 0.028,
+  BASE_T: 0.052,
+  /** x of the booklet / disc centre (the hinge strip sits on the left). */
+  CX: 1.42 / 2 - 0.025 - 0.6,
+  OPEN_ANGLE: Math.PI * 0.96,
+};
+
+const BASE_FRONT_Z = 0; // front face of the black tray
+const LID_Z = CASE.D / 2 - CASE.LID_T / 2; // lid centre
+
+let sharedGeo: {
+  base: THREE.BoxGeometry;
+  lid: THREE.BoxGeometry;
+  cover: THREE.PlaneGeometry;
+  hub: THREE.CylinderGeometry;
+  recess: THREE.RingGeometry;
+} | null = null;
+let sharedMat: {
+  tray: THREE.Material;
+  edge: THREE.Material;
+  lid: THREE.MeshPhysicalMaterial;
+  hub: THREE.Material;
+  recess: THREE.Material;
+} | null = null;
+
+function shared() {
+  if (!sharedGeo) {
+    const base = new THREE.BoxGeometry(CASE.W, CASE.H, CASE.BASE_T);
+    base.translate(0, 0, BASE_FRONT_Z - CASE.BASE_T / 2);
+    const hub = new THREE.CylinderGeometry(0.07, 0.074, 0.012, 40);
+    hub.rotateX(Math.PI / 2);
+    sharedGeo = {
+      base,
+      lid: new THREE.BoxGeometry(CASE.W, CASE.H, CASE.LID_T),
+      cover: new THREE.PlaneGeometry(CASE.COVER, CASE.COVER),
+      hub,
+      recess: new THREE.RingGeometry(0.582, 0.597, 96),
+    };
+    sharedMat = {
+      tray: new THREE.MeshPhysicalMaterial({ color: 0x151517, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.2 }),
+      edge: new THREE.MeshPhysicalMaterial({ color: 0xc4c8ce, roughness: 0.15, clearcoat: 1 }),
+      lid: new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.07,
+        roughness: 0.04,
+        metalness: 0,
+        clearcoat: 1,
+        clearcoatRoughness: 0.02,
+        envMapIntensity: 3,
+        depthWrite: false,
+      }),
+      hub: new THREE.MeshStandardMaterial({ color: 0x2c2c30, roughness: 0.4 }),
+      recess: new THREE.MeshStandardMaterial({ color: 0x29292d, roughness: 0.5 }),
+    };
+  }
+  return { geo: sharedGeo, mat: sharedMat! };
+}
+
+export interface ShelfSlot {
+  stackIndex: number;
+  slot: number;
+  hover: Spring;
+  jitter: { x: number; yaw: number; roll: number };
+  /** True while the case is taken out of its stack. */
+  away: boolean;
+  /** Extra lift used while the stack is being cycled. */
+  lift: number;
+  pushBack: number;
+}
+
+/**
+ * A jewel case: clear hinged lid with the booklet, black tray, and (when
+ * focused) a disc. Hierarchy: root → tilt → body → (base, lidPivot → lid…).
+ */
+export class JewelCase {
+  readonly root = new THREE.Group();
+  readonly tilt = new THREE.Group();
+  readonly body = new THREE.Group();
+  readonly lidPivot = new THREE.Group();
+  readonly cover: THREE.Mesh;
+  readonly lid: THREE.Mesh;
+  readonly base: THREE.Mesh;
+  bookletBack: THREE.Mesh | null = null;
+  disc: Disc | null = null;
+  color = new THREE.Color(0x888888);
+  shelf!: ShelfSlot;
+
+  private coverMat: THREE.MeshStandardMaterial;
+  private spineMat: THREE.MeshStandardMaterial;
+  private backMat: THREE.MeshStandardMaterial;
+  private details: THREE.Group | null = null;
+  private shadow: THREE.Mesh | null = null;
+  private glare: THREE.Mesh | null = null;
+  private _open = 0;
+
+  constructor(public album: Album) {
+    const { geo, mat } = shared();
+    this.coverMat = new THREE.MeshStandardMaterial({ map: placeholderCover(album), roughness: 0.55 });
+    this.spineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
+    this.backMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5 });
+
+    this.base = new THREE.Mesh(geo.base, [mat.edge, this.spineMat, mat.edge, mat.edge, mat.tray, this.backMat]);
+    this.base.castShadow = true;
+
+    this.lidPivot.position.set(-CASE.W / 2, 0, LID_Z);
+    this.lid = new THREE.Mesh(geo.lid, mat.lid);
+    this.lid.position.set(CASE.W / 2, 0, 0);
+    this.lid.renderOrder = 2;
+    this.cover = new THREE.Mesh(geo.cover, this.coverMat);
+    this.cover.position.set(CASE.W / 2 + CASE.CX, 0, -CASE.LID_T / 2 - 0.003);
+    this.cover.castShadow = true;
+    this.lidPivot.add(this.cover, this.lid);
+
+    this.body.add(this.base, this.lidPivot);
+    this.tilt.add(this.body);
+    this.root.add(this.tilt);
+
+    for (const m of [this.base, this.lid, this.cover]) m.userData.case = this;
+    this.setColor(this.color);
+  }
+
+  setCover(texture: THREE.Texture) {
+    const old = this.coverMat.map;
+    this.coverMat.map = texture;
+    this.coverMat.needsUpdate = true;
+    if (old && old !== texture && old.userData.placeholder) old.dispose();
+  }
+
+  setColor(color: THREE.Color) {
+    this.color.copy(color);
+    this.spineMat.map?.dispose();
+    this.spineMat.map = spineTexture(this.album, color);
+    this.spineMat.needsUpdate = true;
+    const hsl = { h: 0, s: 0, l: 0 };
+    color.getHSL(hsl);
+    this.backMat.color.setHSL(hsl.h, Math.min(0.45, hsl.s), Math.min(0.3, hsl.l * 0.7));
+  }
+
+  /** 0 = closed, 1 = fully open (lid swung to the left, pair centred). */
+  get open() {
+    return this._open;
+  }
+  set open(v: number) {
+    this._open = v;
+    this.lidPivot.rotation.y = -v * CASE.OPEN_ANGLE;
+    this.body.position.x = Math.min(1, Math.max(0, v)) * (CASE.W / 2);
+  }
+
+  /** Soft shadow behind the case while it floats in front of the shelf. */
+  setFloatingShadow(opacity: number) {
+    if (!this.shadow) {
+      if (opacity <= 0) return;
+      this.shadow = softShadow(CASE.W, CASE.H, 1);
+      this.shadow.position.set(0.06, -0.09, -0.32);
+      // follows the open pair: a second, wider shadow is overkill, so stretch it
+      this.tilt.add(this.shadow);
+    }
+    const m = this.shadow.material as THREE.MeshBasicMaterial;
+    m.opacity = opacity * 0.3;
+    this.shadow.visible = opacity > 0.001;
+    const open = Math.min(1, Math.max(0, this._open));
+    this.shadow.scale.x = 1 + open;
+  }
+
+  /** Creates the inside of the case (tray hub, booklet back, disc) on demand. */
+  ensureDetails() {
+    if (this.details) return;
+    const { geo, mat } = shared();
+    const d = new THREE.Group();
+    const hub = new THREE.Mesh(geo.hub, mat.hub);
+    hub.position.set(CASE.CX, 0, BASE_FRONT_Z + 0.006);
+    const recess = new THREE.Mesh(geo.recess, mat.recess);
+    recess.position.set(CASE.CX, 0, BASE_FRONT_Z + 0.0015);
+    d.add(hub, recess);
+    this.body.add(d);
+    this.details = d;
+
+    const glareMap = glareTexture().clone();
+    this.glare = new THREE.Mesh(
+      new THREE.PlaneGeometry(CASE.W, CASE.H),
+      new THREE.MeshBasicMaterial({ map: glareMap, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    this.glare.position.set(CASE.W / 2, 0, CASE.LID_T / 2 + 0.001);
+    this.glare.renderOrder = 3;
+    this.glare.raycast = () => {};
+    this.lidPivot.add(this.glare);
+  }
+
+  /** Slides the lid highlight with the case's tilt so it feels like real gloss. */
+  updateGlare(shift: number) {
+    if (!this.glare) return;
+    const m = this.glare.material as THREE.MeshBasicMaterial;
+    m.map!.offset.set(shift, -shift * 0.4);
+    // the highlight belongs to the outside of the lid; fade it as the lid swings away
+    m.opacity = 0.36 * Math.max(0, 1 - this._open * 1.6);
+    this.glare.visible = m.opacity > 0.002;
+  }
+
+  setBooklet(texture: THREE.Texture) {
+    if (!this.bookletBack) {
+      const { geo } = shared();
+      this.bookletBack = new THREE.Mesh(geo.cover, new THREE.MeshStandardMaterial({ roughness: 0.85, color: 0xd6d3cf }));
+      this.bookletBack.rotation.y = Math.PI;
+      this.bookletBack.position.copy(this.cover.position);
+      this.bookletBack.position.z -= 0.002;
+      this.bookletBack.userData.booklet = this;
+      this.lidPivot.add(this.bookletBack);
+    }
+    const m = this.bookletBack.material as THREE.MeshStandardMaterial;
+    if (m.map !== texture) {
+      m.map?.dispose();
+      m.map = texture;
+      m.needsUpdate = true;
+    }
+  }
+
+  /** Local position (in body space) where the disc rests in the tray. */
+  static trayPosition(out = new THREE.Vector3()) {
+    return out.set(CASE.CX, 0, BASE_FRONT_Z + 0.003);
+  }
+
+  insertDisc(disc: Disc) {
+    this.disc = disc;
+    this.body.add(disc.group);
+    JewelCase.trayPosition(disc.group.position);
+    disc.group.quaternion.identity();
+    disc.group.scale.setScalar(1);
+  }
+
+  dispose() {
+    this.coverMat.map?.dispose();
+    this.coverMat.dispose();
+    this.spineMat.map?.dispose();
+    this.spineMat.dispose();
+    this.backMat.dispose();
+    const bm = this.bookletBack?.material as THREE.MeshStandardMaterial | undefined;
+    bm?.map?.dispose();
+    bm?.dispose();
+    this.disc?.dispose();
+    if (this.glare) {
+      const gm = this.glare.material as THREE.MeshBasicMaterial;
+      gm.map?.dispose();
+      gm.dispose();
+      this.glare.geometry.dispose();
+    }
+    this.shadow?.geometry.dispose();
+    (this.shadow?.material as THREE.Material | undefined)?.dispose();
+    this.root.removeFromParent();
+  }
+}
