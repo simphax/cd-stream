@@ -406,23 +406,3 @@ export function softShadow(width: number, height: number, opacity = 0.3) {
   return mesh;
 }
 
-/** Diagonal soft highlight that slides across glossy plastic. */
-let glareTex: THREE.Texture | null = null;
-export function glareTexture() {
-  if (glareTex) return glareTex;
-  const [c, g] = canvas(512, 512);
-  const grad = g.createLinearGradient(0, 0, 512, 512);
-  grad.addColorStop(0, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.36, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.42, 'rgba(255,255,255,0.55)');
-  grad.addColorStop(0.47, 'rgba(255,255,255,0.08)');
-  grad.addColorStop(0.53, 'rgba(255,255,255,0.0)');
-  grad.addColorStop(0.58, 'rgba(255,255,255,0.22)');
-  grad.addColorStop(0.62, 'rgba(255,255,255,0)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 512, 512);
-  glareTex = canvasTexture(c);
-  glareTex.wrapS = THREE.ClampToEdgeWrapping;
-  return glareTex;
-}

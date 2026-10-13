@@ -39,6 +39,8 @@ export class Stage {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.localClippingEnabled = false;
+    // the refraction pass (only the case in your hands uses it) can be half resolution
+    renderer.transmissionResolutionScale = 0.5;
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
     setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());

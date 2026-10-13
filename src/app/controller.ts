@@ -843,6 +843,7 @@ export class Controller {
 
   private prepareFocus(c: JewelCase) {
     c.ensureDetails();
+    c.setCloseUp(true);
     // sharper artwork for the close-up
     loadCover(c.album, true)
       .then(({ texture, source, color }) => {
@@ -978,6 +979,7 @@ export class Controller {
     f.tilt.rotation.set(0, 0, 0);
     f.tilt.position.set(0, 0, 0);
     f.setFloatingShadow(0);
+    f.setCloseUp(false);
     st.lift = this.shelf.clearLift(f);
     st.away = false;
     this.setShadows(f, true);

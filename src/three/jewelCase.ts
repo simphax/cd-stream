@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Album } from '../types';
 import { Disc } from './disc';
-import { glareTexture, placeholderCover, softShadow, spineTexture } from './textures';
+import { glareMaterial, lidGeometry, lidNormalMap, lidRoughnessMap, rosetteGeometry, trayTexture } from './caseDetails';
+import { placeholderCover, softShadow, spineTexture } from './textures';
 import type { Spring } from '../anim/tween';
 
 /** Real jewel case proportions, 1 unit = 100 mm. */
@@ -22,48 +23,71 @@ const LID_Z = CASE.D / 2 - CASE.LID_T / 2; // lid centre
 
 let sharedGeo: {
   base: THREE.BoxGeometry;
-  lid: THREE.BoxGeometry;
+  lid: THREE.BufferGeometry;
   cover: THREE.PlaneGeometry;
-  hub: THREE.CylinderGeometry;
-  recess: THREE.RingGeometry;
+  rosette: THREE.BufferGeometry;
 } | null = null;
 let sharedMat: {
   tray: THREE.Material;
-  edge: THREE.Material;
-  lid: THREE.MeshPhysicalMaterial;
+  rim: THREE.Material;
+  /** Cheap see-through plastic for the many cases on the shelf. */
+  lid: THREE.Material[];
+  /** Real refraction (polystyrene, IOR 1.59) for the one case in your hands. */
+  lidHQ: THREE.Material[];
   hub: THREE.Material;
-  recess: THREE.Material;
 } | null = null;
 
 function shared() {
   if (!sharedGeo) {
     const base = new THREE.BoxGeometry(CASE.W, CASE.H, CASE.BASE_T);
     base.translate(0, 0, BASE_FRONT_Z - CASE.BASE_T / 2);
-    const hub = new THREE.CylinderGeometry(0.07, 0.074, 0.012, 40);
-    hub.rotateX(Math.PI / 2);
     sharedGeo = {
       base,
-      lid: new THREE.BoxGeometry(CASE.W, CASE.H, CASE.LID_T),
+      lid: lidGeometry(CASE.LID_T),
       cover: new THREE.PlaneGeometry(CASE.COVER, CASE.COVER),
-      hub,
-      recess: new THREE.RingGeometry(0.582, 0.597, 96),
+      rosette: rosetteGeometry(),
+    };
+    const normalMap = lidNormalMap();
+    const roughnessMap = lidRoughnessMap();
+    const plastic = {
+      color: 0xffffff,
+      metalness: 0,
+      roughness: 1,
+      roughnessMap,
+      normalMap,
+      normalScale: new THREE.Vector2(0.7, 0.7),
     };
     sharedMat = {
-      tray: new THREE.MeshPhysicalMaterial({ color: 0x151517, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.2 }),
-      edge: new THREE.MeshPhysicalMaterial({ color: 0xc4c8ce, roughness: 0.15, clearcoat: 1 }),
-      lid: new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.07,
-        roughness: 0.04,
-        metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: 0.02,
-        envMapIntensity: 3,
-        depthWrite: false,
-      }),
-      hub: new THREE.MeshStandardMaterial({ color: 0x2c2c30, roughness: 0.4 }),
-      recess: new THREE.MeshStandardMaterial({ color: 0x29292d, roughness: 0.5 }),
+      tray: new THREE.MeshPhysicalMaterial({ map: trayTexture(), roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.3, envMapIntensity: 0.6 }),
+      rim: new THREE.MeshPhysicalMaterial({ color: 0x1b1c1f, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 }),
+      lid: [
+        new THREE.MeshPhysicalMaterial({ ...plastic, transparent: true, opacity: 0.08, envMapIntensity: 3, depthWrite: false }),
+        new THREE.MeshPhysicalMaterial({ color: 0xdfe7e6, roughness: 0.1, transparent: true, opacity: 0.32, envMapIntensity: 2, depthWrite: false }),
+      ],
+      lidHQ: [
+        new THREE.MeshPhysicalMaterial({
+          ...plastic,
+          transmission: 1,
+          thickness: 0.014,
+          ior: 1.59,
+          specularIntensity: 1,
+          envMapIntensity: 1.4,
+          attenuationColor: new THREE.Color(0xeef4f2),
+          attenuationDistance: 0.6,
+        }),
+        // seen edge-on, clear polystyrene turns a faint grey-green
+        new THREE.MeshPhysicalMaterial({
+          color: 0xffffff,
+          roughness: 0.08,
+          transmission: 1,
+          thickness: 0.05,
+          ior: 1.59,
+          envMapIntensity: 1.6,
+          attenuationColor: new THREE.Color(0xa9bdb8),
+          attenuationDistance: 0.04,
+        }),
+      ],
+      hub: new THREE.MeshPhysicalMaterial({ color: 0x232327, roughness: 0.35, clearcoat: 0.6 }),
     };
   }
   return { geo: sharedGeo, mat: sharedMat! };
@@ -103,7 +127,7 @@ export class JewelCase {
   private backMat: THREE.MeshStandardMaterial;
   private details: THREE.Group | null = null;
   private shadow: THREE.Mesh | null = null;
-  private glare: THREE.Mesh | null = null;
+  private glare: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null = null;
   private _open = 0;
 
   constructor(public album: Album) {
@@ -112,7 +136,8 @@ export class JewelCase {
     this.spineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
     this.backMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5 });
 
-    this.base = new THREE.Mesh(geo.base, [mat.edge, this.spineMat, mat.edge, mat.edge, mat.tray, this.backMat]);
+    // faces: +x/−x spines (the inlay shows through), top/bottom rims, tray, back inlay
+    this.base = new THREE.Mesh(geo.base, [this.spineMat, this.spineMat, mat.rim, mat.rim, mat.tray, this.backMat]);
     this.base.castShadow = true;
 
     this.lidPivot.position.set(-CASE.W / 2, 0, LID_Z);
@@ -180,19 +205,13 @@ export class JewelCase {
     if (this.details) return;
     const { geo, mat } = shared();
     const d = new THREE.Group();
-    const hub = new THREE.Mesh(geo.hub, mat.hub);
-    hub.position.set(CASE.CX, 0, BASE_FRONT_Z + 0.006);
-    const recess = new THREE.Mesh(geo.recess, mat.recess);
-    recess.position.set(CASE.CX, 0, BASE_FRONT_Z + 0.0015);
-    d.add(hub, recess);
+    const rosette = new THREE.Mesh(geo.rosette, mat.hub);
+    rosette.position.set(CASE.CX, 0, BASE_FRONT_Z);
+    d.add(rosette);
     this.body.add(d);
     this.details = d;
 
-    const glareMap = glareTexture().clone();
-    this.glare = new THREE.Mesh(
-      new THREE.PlaneGeometry(CASE.W, CASE.H),
-      new THREE.MeshBasicMaterial({ map: glareMap, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
-    );
+    this.glare = new THREE.Mesh(new THREE.PlaneGeometry(CASE.W, CASE.H), glareMaterial());
     this.glare.position.set(CASE.W / 2, 0, CASE.LID_T / 2 + 0.001);
     this.glare.renderOrder = 3;
     this.glare.raycast = () => {};
@@ -202,11 +221,17 @@ export class JewelCase {
   /** Slides the lid highlight with the case's tilt so it feels like real gloss. */
   updateGlare(shift: number) {
     if (!this.glare) return;
-    const m = this.glare.material as THREE.MeshBasicMaterial;
-    m.map!.offset.set(shift, -shift * 0.4);
+    const u = this.glare.material.uniforms;
+    u.shift.value = shift;
     // the highlight belongs to the outside of the lid; fade it as the lid swings away
-    m.opacity = 0.36 * Math.max(0, 1 - this._open * 1.6);
-    this.glare.visible = m.opacity > 0.002;
+    u.opacity.value = 0.24 * Math.max(0, 1 - this._open * 1.6);
+    this.glare.visible = u.opacity.value > 0.002;
+  }
+
+  /** Swap between the cheap shelf plastic and the refractive close-up plastic. */
+  setCloseUp(on: boolean) {
+    const { mat } = shared();
+    this.lid.material = on ? mat.lidHQ : mat.lid;
   }
 
   setBooklet(texture: THREE.Texture) {
@@ -251,9 +276,7 @@ export class JewelCase {
     bm?.dispose();
     this.disc?.dispose();
     if (this.glare) {
-      const gm = this.glare.material as THREE.MeshBasicMaterial;
-      gm.map?.dispose();
-      gm.dispose();
+      this.glare.material.dispose();
       this.glare.geometry.dispose();
     }
     this.shadow?.geometry.dispose();
